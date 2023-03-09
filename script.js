@@ -147,12 +147,14 @@ function draw() {
                         if (options[k].label === stateChoices[choices[i]]) {
                             options[k].disabled = true;
                         }
-                        else {
-                            // Not working
+                    }
+                } else {
+                    for (let k = 0; k < options.length; k++) {
+                        if (options[k].label === stateChoices[choices[i]]) {
                             options[k].disabled = false;
                         }
                     }
-                }    
+                }  
             }
         }  
     }
@@ -167,8 +169,8 @@ function draw() {
    
 
     // display inventory / backpack
+    let backpackItem = select('#inv');
     for (let i = 0; i < inventory.length; i++) {
-        let backpackItem = select('#inv');
         backpackItem.html(`<p class='item' onclick='DropItem(event)'>${inventory[i]}</p>`, true);
     }
 
