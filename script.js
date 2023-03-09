@@ -1,5 +1,8 @@
+// Names:
+
 // global variables used throughout
-let gameState, selectedChoice, actionButton, descrip, title, sel, sceneImg;
+let gameState, selectedChoice, actionButton, descrip, title, sel, sceneImg, backpack;
+let inventory = [];
 
 // state refers to what situation we are currently showing
 const state = {
@@ -24,23 +27,35 @@ const stateChoices = [
 // based on what state our game is currently showing.
 // note: id is not currently used, but it's a nice label to know which state it represents. 
 // ** This order needs to be the same as state and stateChoices **
-const game = [
+let game = [
     {
         id: state.start,
         backgroundImg: 'images/bed.jpg',
+        title: "Early Morning",
         description: "You groggily begin to stir from a deep sleep. You hope you're in your own bed.",
-        choices: [state.wakeup, state.sleep]
+        choices: [state.wakeup, state.sleep],
+        items: ['gloves', 'keys', 'knife', 'sword', 'shield'], // list items available to collect (if any) as strings
+        requiredItems: []
+        
     },
     {
         id: state.sleep,
+        backgroundImg: 'images/sleep.jpg',
+        title: "Deep Sleep",
         description: "You decide to fall back asleep, ignoring the voice stirring in your subconscious. You don't get a chance to wakeup again.",
-        choices: [state.start]
+        choices: [state.start],
+        items: [],
+        requiredItems: []
     },
     {
         id: state.wakeup,
         description: "You bolt upright, a sense of dread filling your head as you know something is not right. You hear a whooshing noise to your left and have trouble breathing. There's a fire.",
-        choices: [state.jumpOutWindow, state.tryDoor]
-    }
+        choices: [state.jumpOutWindow, state.tryDoor],
+        items: [],
+        requiredItems: [['gloves', state.tryDoor]] // list of items required for choices in (item, choice) format.
+        
+    },
+    
 ]
 
 function setup() {
@@ -52,18 +67,29 @@ function setup() {
 
     // Story name and settings
     let title = createDiv(`<h1>Waking Nightmares</h1>`);
-    title.position(windowWidth / 2 - 300, 10);
+    title.position(0, 10);
     title.style("font-size", "24px");
 
     // Create Div tag to show game state description and settings
     descrip = createDiv();
-    descrip.position(windowWidth / 2 - 300, 150);
+    descrip.position(windowWidth / 2 - 250, 150);
     descrip.style("font-size", "30px");
     descrip.style("width", "500px");
 
+    // Div tag for items in room
+    visibleItems = createDiv(`<div id='vis-items'>You see following nearby items: </div>`);
+    visibleItems.position(30, 350);
+    visibleItems.style("font-size: 18px");
+
+    backpack = createDiv(`<h3>Backpack</h3>
+                          <div id='inv'></div>`);
+    backpack.position(windowWidth - 250, 150);
+    backpack.style("font-size: 30px");
+    
+
     // Create Select tag to create dropdown options and settings
     sel = createSelect();
-    sel.position(windowWidth / 2 - 200, 400);
+    sel.position(windowWidth / 2 - 200, 600);
     sel.style("height: 35px");
     sel.style("font-family: Garamond");
     sel.style("font-size: 24px");
@@ -72,6 +98,11 @@ function setup() {
     sceneImg = createImg();
     sceneImg.position(50, 150);
     sceneImg.style("width: 250px");
+
+    // Create selection button to change states from current to selected state
+    actionBtn = createButton("Choose");
+    actionBtn.position(windowWidth / 2 - 150, 700);
+    actionBtn.mousePressed(makeChoice);
     
 }
 
@@ -80,18 +111,22 @@ function draw() {
 
     // Shows img from current state if there is one
     if (game[gameState].backgroundImg) {
+        // the sceneImg is the smaller img
         sceneImg.attribute('src', game[gameState].backgroundImg);    
         sceneImg.show();
+        // change the actual background-image property
+        let bkgrnd = select('.background');
+        bkgrnd.style("background-image: url(" + game[gameState].backgroundImg + ")");
     }
     
     // Choose 1 of the 2 below methods to display your descriptions
     // method1: Display through html element -> allows using css to style
-    descrip.html(`<p style="text-decoration: underline;">Method 1</p>
+    descrip.html(`<p class="scene-title">${game[gameState].title}</p>
                   <p>${game[gameState].description}</p>`);
 
-    // method2: Display with text p5 settings
-    textFont('Helvetica', 24);
-    text("Method 2: " + game[gameState].description, windowWidth / 2 + 250, 200, 300);
+    // // method2: Display with text p5 settings
+    // textFont('Helvetica', 24);
+    // text("Method 2: " + game[gameState].description, windowWidth / 2 + 250, 200, 300);
 
     // Create array of choices based on current state
     let choices = [];
@@ -101,7 +136,25 @@ function draw() {
 
     // Add choices to options dropdown box
     for (let i = 0; i < choices.length; i++) {
-        sel.option(stateChoices[choices[i]], state[i]);
+        sel.option(stateChoices[choices[i]], choices[i]);
+        if (game[gameState].requiredItems.length > 0) {
+            let options = document.getElementsByTagName('option');
+            // Check for required items to progress to next state
+            // Disable option if required item not in inventory
+            for (let j = 0; j < game[gameState].requiredItems.length; j++) {
+                if (!inventory.includes(game[gameState].requiredItems[j][0]) && game[gameState].requiredItems[j][1] === choices[i]) {
+                    for (let k = 0; k < options.length; k++) {
+                        if (options[k].label === stateChoices[choices[i]]) {
+                            options[k].disabled = true;
+                        }
+                        else {
+                            // Not working
+                            options[k].disabled = false;
+                        }
+                    }
+                }    
+            }
+        }  
     }
 
     // Set initial selected choice to first item in dropdown list
@@ -111,11 +164,60 @@ function draw() {
     // calls updateSelectedChoice function if new item in dropdown is selected
     sel.changed(updateSelectedChoice);
 
-    // Create selection button to change states from current to selected state
-    actionBtn = createButton("Choose");
-    actionBtn.position(windowWidth / 2 - 150, 500);
-    actionBtn.mousePressed(makeChoice);
+   
+
+    // display inventory / backpack
+    for (let i = 0; i < inventory.length; i++) {
+        let backpackItem = select('#inv');
+        backpackItem.html(`<p class='item' onclick='DropItem(event)'>${inventory[i]}</p>`, true);
+    }
+
+    // display visible items to pickup
+    let visItems = select('#vis-items');
+    if (game[gameState].items.length > 0) {
+        for (let i = 0; i < game[gameState].items.length; i++) {
+            visItems.html(`<p class='item' onclick='PickupItem(event)'>${game[gameState].items[i]}</p>`, true);
+        }
+    }
     
+}
+// Called when clicking on items on ground to add to inventory / backpack
+function PickupItem(event) {
+    // Capture which element was clicked on and add text to inventory array
+    let item = event.target;
+    inventory.push(item.innerHTML);
+
+    // Remove from gamestate items array
+    let index = game[gameState].items.indexOf(item.innerHTML);
+    game[gameState].items.splice(index, 1);
+
+    // remove all items to prevent duplicates when redrawn
+    ClearInventoryItemsForRedraw();
+    
+    redraw();
+}
+
+// Called when clicking on items in inventory / backpack to drop back into current game state [items]
+function DropItem(event) {
+    // Capture which element was clicked on and add text to gamestate items array
+    let item = event.target;
+    game[gameState].items.push(item.innerHTML);
+
+    // remove from inventory array
+    let index = inventory.indexOf(item.innerHTML);
+    inventory.splice(index, 1);
+
+    ClearInventoryItemsForRedraw();
+   
+    redraw();
+}
+
+function ClearInventoryItemsForRedraw() {
+    // remove all items to prevent duplicates when redrawn
+    let items = document.querySelectorAll(".item");
+    for (let i = 0; i < items.length; i++) {
+        items[i].remove();
+    }
 }
 
 // updates global selectedChoice to store state selected in dropdown
@@ -136,6 +238,7 @@ function makeChoice() {
     gameState = selectedChoice;
     clearOptions();
     sceneImg.hide();
+    ClearInventoryItemsForRedraw();
     redraw();
 }
 
